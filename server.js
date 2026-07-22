@@ -29,6 +29,23 @@ app.get("/tasks/:id", (req,res)=>{{
     }
 }})
 
+app.post("/tasks", (req,res)=>{
+    const title = req.body.title;
+    if(!title ||  title.trim() === ""){
+        res.status(400).send("error : Title is required");
+    }
+    tasks.push(
+        {
+            id : tasks.length +1 , 
+            title : title,
+            done : "FALSE"
+        }
+    )
+    res.status(201).send({
+        "nessage " : "Task created successfully"
+    })
+})
+
 app.get("/health", (req,res) => {
     res.send({ "status": "ok" });
 });
