@@ -1,3 +1,4 @@
+const e = require("express");
 const express = require("express");
 
 const app = express();
@@ -42,9 +43,48 @@ app.post("/tasks", (req,res)=>{
         }
     )
     res.status(201).send({
-        "nessage " : "Task created successfully"
+        "message" : "Task created successfully"
     })
 })
+
+app.put("/tasks/:id",(req,res)=>{
+    const taskid = parseInt(req.params.id); 
+    const task = tasks.find(t => t.id === taskid);
+    if(!task){
+        res.status(404).send({ "error": `Task ${taskid} not found` });
+    } 
+        const title = req.body.title;
+        const done = req.body.done;
+        if (title === undefined && done === undefined) {
+            res.status(400).send({ "error": "At least one of title or done is required" });
+            return;
+        }
+        if(title && title.trim() !== ""){
+            task.title = title;
+        }
+        else {
+            res.status(400).send({ "error": "Title is required" });
+            return;
+        }
+        if (done !== undefined) {
+            if (typeof done !== "boolean") {
+        return res.status(400).send({
+            error: "Done must be true or false."
+        });
+    }
+}
+res.send(task);
+})
+
+app.delete("/tasks/:id", (req,res)=>{
+    const taskid = parseInt(req.params.id); 
+    const taskIndex = tasks.findIndex(t => t.id === taskid);
+    if(taskIndex === -1){
+    return res.status(404).send({ "error": `Task ${taskid} not found` });
+    }
+    tasks.splice(taskIndex, 1);
+    res.status(204).send();    
+});
 
 app.get("/health", (req,res) => {
     res.send({ "status": "ok" });
