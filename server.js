@@ -70,16 +70,15 @@ app.post("/tasks", (req,res)=>{
     if(!title ||  title.trim() === ""){
         res.status(400).send("error : Title is required");
     }
-    tasks.push(
-        {
-            id : tasks.length +1 , 
-            title : title,
-            done : "FALSE"
-        }
-    )
-    res.status(201).send({
-        "message" : "Task created successfully"
-    })
+     const task = db
+        .prepare("insert into tasks (title,done) values (?,?)")
+        .run(title, 0);
+    
+        const newTask = db
+        .prepare("SELECT * FROM tasks WHERE id = ?")
+        .get(task.lastInsertRowid);
+
+    res.status(201).send(newTask);
 })
 
 app.put("/tasks/:id",(req,res)=>{
