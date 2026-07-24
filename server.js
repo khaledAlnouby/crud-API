@@ -35,29 +35,35 @@ if (count.count === 0) {
     insert.run("Task 2", 0);
     insert.run("Task 3", 0);
     }
-const tasks = [
-    { id: 1, title: "Task 1", done: "TRUE " },
-    { id: 2, title: "Task 2", done: "FALSE" },
-    { id: 3, title: "Task 3", done: "FALSE" }
-];
 
 app.get("/", (req,res) => {
     res.send({ "name": "Task API", "version": "1.0", "endpoints": ["/tasks"] });
 });
 
 app.get("/tasks", (req,res)=>{
-    res.send (tasks);
-})
+const tasks = db
+        .prepare("SELECT * FROM tasks")
+        .all();
 
-app.get("/tasks/:id", (req,res)=>{{
-    const taskid = parseInt(req.params.id); 
-    const task = tasks.find(t => t.id === taskid);
+    res.send(tasks);})
+
+app.get("/tasks/:id", (req, res) => {
+
+    const taskid = parseInt(req.params.id);
+
+    const task = db
+        .prepare("SELECT * FROM tasks WHERE id = ?")
+        .get(taskid);
+
     if (task) {
         res.send(task);
     } else {
-        res.status(404).send({ "error": `Task ${taskid} not found` });
+        res.status(404).send({
+            error: `Task ${taskid} not found`
+        });
     }
-}})
+
+});
 
 app.post("/tasks", (req,res)=>{
     const title = req.body.title;
