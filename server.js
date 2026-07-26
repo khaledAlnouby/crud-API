@@ -82,42 +82,76 @@ app.post("/tasks", (req,res)=>{
 })
 
 app.put("/tasks/:id",(req,res)=>{
-    const taskid = parseInt(req.params.id); 
-    const task = tasks.find(t => t.id === taskid);
-    if(!task){
-        res.status(404).send({ "error": `Task ${taskid} not found` });
-    } 
-        const title = req.body.title;
-        const done = req.body.done;
-        if (title === undefined && done === undefined) {
-            res.status(400).send({ "error": "At least one of title or done is required" });
-            return;
-        }
-        if(title && title.trim() !== ""){
-            task.title = title;
-        }
-        else {
-            res.status(400).send({ "error": "Title is required" });
-            return;
-        }
-        if (done !== undefined) {
-            if (typeof done !== "boolean") {
+  const taskid = parseInt(req.params.id);
+
+    const title = req.body.title;
+    const done = req.body.done;
+
+    // Validate body
+    if (title === undefined || done === undefined) {
         return res.status(400).send({
-            error: "Done must be true or false."
+            error: "Both title and done are required"
         });
     }
-}
-res.send(task);
-})
 
-app.delete("/tasks/:id", (req,res)=>{
-    const taskid = parseInt(req.params.id); 
-    const taskIndex = tasks.findIndex(t => t.id === taskid);
-    if(taskIndex === -1){
-    return res.status(404).send({ "error": `Task ${taskid} not found` });
+    if (typeof title !== "string" || title.trim() === "") {
+        return res.status(400).send({
+            error: "Title is required"
+        });
     }
-    tasks.splice(taskIndex, 1);
-    res.status(204).send();    
+
+    if (typeof done !== "boolean") {
+        return res.status(400).send({
+            error: "Done must be true or false"
+        });
+    }
+
+    // Check if task exists
+    const task = db
+        .prepare("SELECT * FROM tasks WHERE id = ?")
+        .get(taskid);
+
+    if (!task) {
+        return res.status(404).send({
+            error: `Task ${taskid} not found`
+        });
+    }
+
+    // Update database
+    db.prepare(`
+        UPDATE tasks
+        SET title = ?, done = ?
+        WHERE id = ?
+    `).run(title, done ? 1 : 0, taskid);
+
+    // Return updated task
+    const updatedTask = db
+        .prepare("SELECT * FROM tasks WHERE id = ?")
+        .get(taskid);
+
+    res.status(200).send(updatedTask);
+});
+
+app.delete("/tasks/:id", (req, res) => {
+    const taskid = parseInt(req.params.id);
+
+    // Check if task exists
+    const task = db
+        .prepare("SELECT * FROM tasks WHERE id = ?")
+        .get(taskid);
+
+    if (!task) {
+        return res.status(404).send({
+            error: `Task ${taskid} not found`
+        });
+    }
+
+    // Delete from database
+    db.prepare("DELETE FROM tasks WHERE id = ?")
+        .run(taskid);
+
+    // Successful delete
+    res.status(204).send();
 });
 
 app.get("/health", (req,res) => {
