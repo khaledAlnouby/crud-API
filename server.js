@@ -1,8 +1,7 @@
 const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const openapi=require("./openapi.json");
-const Database = require("better-sqlite3");
-const { initializeDatabase } = require("./db");
+const { pool , initializeDatabase } = require("./db");
 
 
 const app = express();
@@ -10,58 +9,39 @@ const PORT = 3000;
 app.use(express.json());
 app.use(    "/docs", swaggerUi.serve,swaggerUi.setup(openapi) );
 
-const db = new Database("tasks.db");
-
-// Create tasks table
-db.exec(`
-    CREATE TABLE IF NOT EXISTS tasks (
-        id INTEGER PRIMARY KEY,
-        title TEXT,
-        done Boolean
-    )
-`);
-const count = db
-    .prepare("SELECT COUNT(*) AS count FROM tasks")
-    .get();
-
-
-if (count.count === 0) {
-
-    const insert = db.prepare(`
-        INSERT INTO tasks (title, done)
-        VALUES (?, ?)
-    `);
-
-    insert.run("Task 1", 1);
-    insert.run("Task 2", 0);
-    insert.run("Task 3", 0);
-    }
 
 app.get("/", (req,res) => {
     res.send({ "name": "Task API", "version": "1.0", "endpoints": ["/tasks"] });
 });
 
-app.get("/tasks", (req,res)=>{
-const tasks = db
-        .prepare("SELECT * FROM tasks")
-        .all();
+app.get("/tasks", async (req,res)=>{
+    try{
+    const result = await pool.query("SELECT * FROM tasks");
+        res.status(200).send(result.rows);
+    }
+    catch(error){
+        console.error( error);
+        res.status(500).send({error: "Database error"
 
-    res.send(tasks);})
-
-app.get("/tasks/:id", (req, res) => {
-
-    const taskid = parseInt(req.params.id);
-
-    const task = db
-        .prepare("SELECT * FROM tasks WHERE id = ?")
-        .get(taskid);
-
-    if (task) {
-        res.send(task);
-    } else {
-        res.status(404).send({
-            error: `Task ${taskid} not found`
         });
+    }
+
+})
+
+app.get("/tasks/:id", async (req, res) => {
+    try{
+    const taskid = parseInt(req.params.id);
+    const result = await pool.query("SELECT * FROM tasks WHERE id = $1",[taskid]); 
+
+    if (result.rows.length === 0) {
+            return res.status(404).send({
+                error: "Task not found"
+            });
+        }
+           res.status(200).send(result.rows[0]);
+    }catch(error){
+        console.error(error);
+        res.status(500).send({error: "Database error"});
     }
 
 });
