@@ -2,6 +2,7 @@ const express = require("express");
 const swaggerUi = require("swagger-ui-express");
 const openapi=require("./openapi.json");
 const Database = require("better-sqlite3");
+const { initializeDatabase } = require("./db");
 
 
 const app = express();
@@ -158,6 +159,11 @@ app.get("/health", (req,res) => {
     res.send({ "status": "ok" });
 });
 
-app.listen(PORT, () => {
-    console.log(`server is running on ${PORT}`);
+app.listen(PORT, async () => {
+    try {
+        await initializeDatabase();
+        console.log(`server is running on ${PORT}`);
+    } catch (error) {
+        console.error("Database initialization failed:", error);
+    }
 });
