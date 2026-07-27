@@ -1,6 +1,6 @@
 # Task API
 
-A simple REST API built using **Node.js**, **Express.js**, and **SQLite** for managing tasks.
+A simple REST API built using **Node.js**, **Express.js**, and **PostgreSQL** for managing tasks.
 
 The API supports full CRUD operations:
 
@@ -9,7 +9,7 @@ The API supports full CRUD operations:
 * **Update** existing tasks
 * **Delete** tasks
 
-The project uses **SQLite** as a persistent database and **Swagger UI** for interactive API documentation.
+The project uses **PostgreSQL** as the database. PostgreSQL runs inside a **Docker container**, allowing the database to run as a separate service while keeping its data persistent using a Docker volume.
 
 ---
 
@@ -23,13 +23,32 @@ Run:
 npm install
 ```
 
-This installs all required packages, including:
+This installs all required Node.js packages.
 
-* Express.js
-* Swagger UI Express
-* better-sqlite3
+## 2. Start PostgreSQL with Docker
 
-## 2. Start the server
+Make sure Docker Desktop is running, then run:
+
+```bash
+docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+```
+
+This command:
+
+* Runs PostgreSQL 17
+* Creates a container named `taskdb`
+* Creates a PostgreSQL database named `tasks`
+* Sets the PostgreSQL password to `dev`
+* Maps PostgreSQL to port `5432`
+* Creates a persistent Docker volume named `taskdata`
+
+Check that the container is running:
+
+```bash
+docker ps
+```
+
+## 3. Start the API
 
 Run:
 
@@ -51,56 +70,96 @@ http://localhost:3000/docs
 
 ---
 
-# Why SQLite?
+# PostgreSQL Database
 
-SQLite was chosen for this project because it provides a simple way to store data without requiring a separate database server.
+Unlike SQLite, PostgreSQL runs as a separate database server.
 
-The main benefits are:
+The PostgreSQL server is running inside Docker:
 
-* **Single file** — the entire database is stored in one `tasks.db` file.
-* **Zero setup** — no separate database server or configuration is required.
-* **Survives restarts** — tasks remain stored after the Node.js server is stopped and started again.
-* **Simple and lightweight** — it is well suited for this small REST API.
+```text
+Docker Container
+     │
+     ├── Name: taskdb
+     ├── Database: tasks
+     ├── User: postgres
+     ├── Password: dev
+     └── Port: 5432
+```
+
+The database can be accessed from the terminal using:
+
+```bash
+docker exec -it taskdb psql -U postgres -d tasks
+```
+
+Once connected, the PostgreSQL prompt appears:
+
+```text
+tasks=#
+```
+
+At Stage 0, running:
+
+```sql
+\dt
+```
+
+returns:
+
+```text
+Did not find any relations.
+```
+
+This is expected because the tables are created in a later stage.
 
 ---
 
-# Database
+# Why PostgreSQL?
 
-The database file is:
+PostgreSQL was chosen because it is a full relational database server that is suitable for real backend applications.
+
+Using Docker makes PostgreSQL easier to install and run without manually installing and configuring the database server on the host machine.
+
+The Docker volume:
 
 ```text
-tasks.db
+taskdata
 ```
 
-It is created automatically by the application when the server starts:
+keeps PostgreSQL's data persistent, so the data survives when the PostgreSQL container is stopped and started again.
 
-```javascript
-const db = new Database("tasks.db");
+---
+
+# Docker Volume
+
+The database uses a named Docker volume:
+
+```text
+taskdata
 ```
 
-If the file does not exist, SQLite creates it automatically.
+The volume is mounted at:
 
-The application also automatically creates the `tasks` table:
-
-```sql
-CREATE TABLE IF NOT EXISTS tasks (
-    id INTEGER PRIMARY KEY,
-    title TEXT,
-    done Boolean
-)
+```text
+/var/lib/postgresql/data
 ```
 
-The table contains:
+This means the database data is stored outside the container itself.
 
-| Column  | Type    | Description                                   |
-| ------- | ------- | --------------------------------------------- |
-| `id`    | INTEGER | Primary key, automatically assigned by SQLite |
-| `title` | TEXT    | Task title                                    |
-| `done`  | Boolean | Stored as `0` or `1`                          |
+The container can therefore be stopped or recreated without automatically losing the database data.
 
-The application seeds three example tasks only when the table is empty.
+---
 
-The `tasks.db` file is normally **git-ignored**, so each clone of the repository starts with a fresh database. When a new user starts the application, the database file, table, and three example tasks are created automatically.
+
+
+The `.gitignore` file contains:
+
+```gitignore
+node_modules/
+.env
+```
+
+
 
 ---
 
@@ -119,21 +178,14 @@ The `tasks.db` file is normally **git-ignored**, so each clone of the repository
 
 # Task Object Structure
 
-A task returned by the API looks like:
+A task has the following structure:
 
 ```json
 {
   "id": 1,
-  "title": "Task 1",
-  "done": 1
+  "title": "Learn Express.js",
+  "done": false
 }
-```
-
-SQLite stores boolean values as:
-
-```text
-1 = true / completed
-0 = false / not completed
 ```
 
 ---
@@ -160,17 +212,17 @@ Content-Type: application/json
   {
     "id": 1,
     "title": "Task 1",
-    "done": 1
+    "done": false
   },
   {
     "id": 2,
     "title": "Task 2",
-    "done": 0
+    "done": false
   },
   {
     "id": 3,
     "title": "Task 3",
-    "done": 0
+    "done": false
   }
 ]
 ```
@@ -196,7 +248,7 @@ Content-Type: application/json
 {
   "id": 1,
   "title": "Task 1",
-  "done": 1
+  "done": false
 }
 ```
 
@@ -229,11 +281,11 @@ Content-Type: application/json
 {
   "id": 4,
   "title": "Buy milk",
-  "done": 0
+  "done": false
 }
 ```
 
-The ID is assigned automatically by SQLite.
+The ID is assigned automatically by PostgreSQL.
 
 ---
 
@@ -258,7 +310,7 @@ Content-Type: application/json
 {
   "id": 2,
   "title": "Study Node.js",
-  "done": 1
+  "done": true
 }
 ```
 
@@ -300,50 +352,25 @@ Response:
 
 ---
 
-# SQL Query Example
+# PostgreSQL Command-Line Access
 
-During Stage 4, the database was opened using **DB Browser for SQLite** and SQL queries were executed directly.
+PostgreSQL can be opened directly from the Docker container using:
 
-One example query was:
+```bash
+docker exec -it taskdb psql -U postgres -d tasks
+```
+
+Inside `psql`, the following command lists all database tables:
 
 ```sql
-SELECT * FROM tasks WHERE done = 1;
+\dt
 ```
 
-This query returns only completed tasks.
+To exit:
 
-For example, if the database contains:
-
-| id | title  | done |
-| -: | ------ | ---: |
-|  1 | Task 1 |    1 |
-|  2 | Task 2 |    0 |
-|  3 | Task 3 |    1 |
-
-the query returns:
-
-| id | title  | done |
-| -: | ------ | ---: |
-|  1 | Task 1 |    1 |
-|  3 | Task 3 |    1 |
-
-Changes made directly in DB Browser for SQLite are reflected by the API because both the API and DB Browser use the same `tasks.db` file.
-
----
-
-# Database Screenshot
-
-The SQLite database was opened using **DB Browser for SQLite**.
-
-Add your screenshot to the project and name it:
-
-```text
-DB.png
+```sql
+\q
 ```
-
-Then the screenshot can be displayed here:
-
-![SQLite database in DB Browser](DB.png)
 
 ---
 
@@ -368,44 +395,46 @@ http://localhost:3000/docs
 ```text
 crud API/
 │
-├── server.js                  # Express server and API routes
-├── openapi.json               # Swagger/OpenAPI documentation
-├── README.md                  # Project documentation
-├── database-screenshot.png    # DB Browser screenshot
-├── swagger-screenshot.png     # Swagger UI screenshot
-├── .gitignore                 # Git ignored files
+├── server.js
+├── openapi.json
+├── README.md
+├── swagger-screenshot.png
+├── .gitignore
 ├── package.json
 └── package-lock.json
 ```
 
-The `tasks.db` file is intentionally not included in the repository because it is created automatically when the application starts.
+The `.gitignore` file contains:
+
+```gitignore
+node_modules/
+.env
+```
 
 ---
 
-# Automatic Database Setup
+# Docker Setup
 
-No manual database setup is required.
-
-After cloning the repository, run:
+The PostgreSQL container can be checked with:
 
 ```bash
-npm install
+docker ps
 ```
 
-Then start the application:
+The PostgreSQL database can be accessed with:
 
 ```bash
-npm start
+docker exec -it taskdb psql -U postgres -d tasks
 ```
 
-The application automatically:
+The database runs on:
 
-1. Creates `tasks.db` if it does not exist.
-2. Creates the `tasks` table.
-3. Checks whether the table is empty.
-4. Inserts three example tasks if the table is empty.
-
-A clean installation therefore starts with three example tasks.
+```text
+Host: localhost
+Port: 5432
+Database: tasks
+Username: postgres
+```
 
 ---
 
@@ -413,7 +442,42 @@ A clean installation therefore starts with three example tasks.
 
 * Node.js
 * Express.js
-* SQLite
-* better-sqlite3
+* PostgreSQL
+* Docker
+* better-sqlite3 (previous SQLite stage)
 * Swagger UI Express
 * OpenAPI 3.0
+
+---
+
+# Stage 0 Checkpoint
+
+The Stage 0 PostgreSQL setup was completed successfully.
+
+The following command opens the PostgreSQL database:
+
+```bash
+docker exec -it taskdb psql -U postgres -d tasks
+```
+
+Running:
+
+```sql
+\dt
+```
+
+returns:
+
+```text
+Did not find any relations.
+```
+
+This is expected at this stage because no tables have been created yet.
+
+The PostgreSQL container is running on:
+
+```text
+localhost:5432
+```
+
+The Docker volume `taskdata` provides persistent database storage.
