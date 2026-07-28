@@ -46,23 +46,24 @@ app.get("/tasks/:id", async (req, res) => {
 
 });
 
-app.post("/tasks", (req,res)=>{
-    const title = req.body.title;
+app.post("/tasks",async (req,res)=>{
+    try{
+ const title = req.body.title;
     if(!title ||  title.trim() === ""){
         res.status(400).send("error : Title is required");
     }
-     const task = db
-        .prepare("insert into tasks (title,done) values (?,?)")
-        .run(title, 0);
-    
-        const newTask = db
-        .prepare("SELECT * FROM tasks WHERE id = ?")
-        .get(task.lastInsertRowid);
+        const result = await pool.query("INSERT INTO tasks (title, done) VALUES ($1, $2) RETURNING *",[title, false]); 
 
-    res.status(201).send(newTask);
-})
+    res.status(201).send(result.rows[0]);
+    }
+   catch(error){
+    console.error(error);
+    res.status(500).send({error: "Database error"});
+   }
+});
 
-app.put("/tasks/:id",(req,res)=>{
+app.put("/tasks/:id",async (req,res)=>{
+    try{
   const taskid = parseInt(req.params.id);
 
     const title = req.body.title;
@@ -88,51 +89,41 @@ app.put("/tasks/:id",(req,res)=>{
     }
 
     // Check if task exists
-    const task = db
-        .prepare("SELECT * FROM tasks WHERE id = ?")
-        .get(taskid);
-
-    if (!task) {
+    const check = await pool.query("SELECT * FROM tasks WHERE id = $1",[taskid]); 
+    if (check.rows.length === 0) {
         return res.status(404).send({
             error: `Task ${taskid} not found`
         });
     }
 
     // Update database
-    db.prepare(`
-        UPDATE tasks
-        SET title = ?, done = ?
-        WHERE id = ?
-    `).run(title, done ? 1 : 0, taskid);
-
-    // Return updated task
-    const updatedTask = db
-        .prepare("SELECT * FROM tasks WHERE id = ?")
-        .get(taskid);
-
-    res.status(200).send(updatedTask);
+    const result = await pool.query("UPDATE tasks SET title = $1, done = $2 WHERE id = $3 RETURNING *",[title,done,taskid ]); 
+    res.status(200).send(result.rows[0]);
+}catch(error){
+    console.error(error);
+    res.status(500).send({error: "Database error"});
+}
 });
 
-app.delete("/tasks/:id", (req, res) => {
+app.delete("/tasks/:id",async (req, res) => {
+    try{
     const taskid = parseInt(req.params.id);
 
     // Check if task exists
-    const task = db
-        .prepare("SELECT * FROM tasks WHERE id = ?")
-        .get(taskid);
-
-    if (!task) {
+    const check = await pool.query("SELECT * FROM tasks WHERE id = $1",[taskid]); 
+    if (check.rows.length === 0) {
         return res.status(404).send({
             error: `Task ${taskid} not found`
         });
     }
 
     // Delete from database
-    db.prepare("DELETE FROM tasks WHERE id = ?")
-        .run(taskid);
-
+    const result = await pool.query("DELETE FROM tasks WHERE id = $1",[taskid]);
     // Successful delete
     res.status(204).send();
+}catch(error){
+    console.error(error);
+    res.status(500).send({error: "Database error"});}
 });
 
 app.get("/health", (req,res) => {
