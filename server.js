@@ -130,11 +130,12 @@ app.get("/health", (req,res) => {
     res.send({ "status": "ok" });
 });
 
-app.listen(PORT, async () => {
-    try {
-        await initializeDatabase();
-        console.log(`server is running on ${PORT}`);
-    } catch (error) {
+initializeDatabase()
+    .then(() => {
+        app.listen(PORT, () => {
+            console.log(`Server is running on port ${PORT}`);
+        });
+    })
+    .catch((error) => {
         console.error("Database initialization failed:", error);
-    }
-});
+    });
