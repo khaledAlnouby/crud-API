@@ -9,54 +9,75 @@ The API supports full CRUD operations:
 * **Update** existing tasks
 * **Delete** tasks
 
-The project uses **PostgreSQL** as the database. PostgreSQL runs inside a **Docker container**, allowing the database to run as a separate service while keeping its data persistent using a Docker volume.
+The application uses **PostgreSQL** as its database and **Docker Compose** to run the API and database together.
+
+The entire application stack can be started with one command:
+
+```bash
+docker compose up
+```
+
+Swagger UI is also included for interactive API documentation.
 
 ---
 
 # Installation and Running
 
-## 1. Install dependencies
+## 1. Clone the repository
 
-Run:
+Clone the repository and enter the project directory:
+
+```bash
+git clone <https://github.com/khaledAlnouby/crud-API.git>
+cd crud-api
+```
+
+## 2. Install dependencies
+
+If you are running the application directly on your machine, dependencies can be installed with:
 
 ```bash
 npm install
 ```
 
-This installs all required Node.js packages.
+However, when using Docker Compose, the dependencies are installed inside the API Docker image automatically.
 
-## 2. Start PostgreSQL with Docker
+## 3. Create the environment file
+
+The project includes a `.env.example` file containing the required environment variable.
+
+Copy it to `.env`.
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+The `.env` file contains:
+
+```env
+DATABASE_URL=postgres://postgres:dev@db:5432/tasks
+```
+
+The `.env.example` file is committed to the repository so that another developer knows which environment variables are required.
+
+## 4. Start the entire application
 
 Make sure Docker Desktop is running, then run:
 
 ```bash
-docker run --name taskdb -e POSTGRES_PASSWORD=dev -e POSTGRES_DB=tasks -p 5432:5432 -v taskdata:/var/lib/postgresql/data -d postgres:17
+docker compose up
 ```
 
-This command:
+This single command starts:
 
-* Runs PostgreSQL 17
-* Creates a container named `taskdb`
-* Creates a PostgreSQL database named `tasks`
-* Sets the PostgreSQL password to `dev`
-* Maps PostgreSQL to port `5432`
-* Creates a persistent Docker volume named `taskdata`
+* The Node.js API
+* The PostgreSQL database
+* The Docker network connecting the API and database
+* The persistent PostgreSQL volume
 
-Check that the container is running:
-
-```bash
-docker ps
-```
-
-## 3. Start the API
-
-Run:
-
-```bash
-npm start
-```
-
-The server will start on:
+The server will be available at:
 
 ```text
 http://localhost:3000
@@ -68,89 +89,77 @@ Swagger documentation is available at:
 http://localhost:3000/docs
 ```
 
----
-
-# PostgreSQL Database
-
-Unlike SQLite, PostgreSQL runs as a separate database server.
-
-The PostgreSQL server is running inside Docker:
+To stop the application, press:
 
 ```text
-Docker Container
-     │
-     ├── Name: taskdb
-     ├── Database: tasks
-     ├── User: postgres
-     ├── Password: dev
-     └── Port: 5432
+Ctrl + C
 ```
 
-The database can be accessed from the terminal using:
+---
+
+# Why Docker Compose?
+
+Docker Compose allows the API and PostgreSQL database to run together as one application stack.
+
+Instead of starting PostgreSQL and the API separately, one command starts everything:
 
 ```bash
-docker exec -it taskdb psql -U postgres -d tasks
+docker compose up
 ```
 
-Once connected, the PostgreSQL prompt appears:
+The project contains two services:
 
 ```text
-tasks=#
+api
+ │
+ │ Docker Compose network
+ │
+ ▼
+db
+ │
+ ▼
+PostgreSQL
 ```
 
-At Stage 0, running:
-
-```sql
-\dt
-```
-
-returns:
+The API connects to PostgreSQL using the service name:
 
 ```text
-Did not find any relations.
+db
 ```
 
-This is expected because the tables are created in a later stage.
+Therefore, inside Docker the database connection uses:
+
+```env
+DATABASE_URL=postgres://postgres:YOUR_PASSWORD@db:5432/tasks
+```
+
+`db` is used instead of `localhost` because the API and PostgreSQL are running in separate Docker containers.
 
 ---
 
-# Why PostgreSQL?
+# Environment Variables
 
-PostgreSQL was chosen because it is a full relational database server that is suitable for real backend applications.
+The application requires the following environment variable:
 
-Using Docker makes PostgreSQL easier to install and run without manually installing and configuring the database server on the host machine.
-
-The Docker volume:
-
-```text
-taskdata
+```env
+DATABASE_URL=postgres://postgres:dev@db:5432/tasks
 ```
 
-keeps PostgreSQL's data persistent, so the data survives when the PostgreSQL container is stopped and started again.
-
----
-
-# Docker Volume
-
-The database uses a named Docker volume:
+This variable is stored locally in:
 
 ```text
-taskdata
+.env
 ```
 
-The volume is mounted at:
+The project also contains:
 
 ```text
-/var/lib/postgresql/data
+.env.example
 ```
 
-This means the database data is stored outside the container itself.
+with the same variable and example values.
 
-The container can therefore be stopped or recreated without automatically losing the database data.
-
----
-
-
+The actual `.env` file is ignored by Git.
 
 The `.gitignore` file contains:
 
@@ -159,7 +168,77 @@ node_modules/
 .env
 ```
 
+This prevents environment configuration from being accidentally committed to the repository.
 
+---
+
+# PostgreSQL Database
+
+PostgreSQL runs as a separate Docker Compose service.
+
+The database configuration is:
+
+```text
+Database: tasks
+User: postgres
+Password: dev
+Port: 5432
+Docker service name: db
+```
+
+The PostgreSQL database is created automatically by Docker Compose.
+
+The application automatically creates the `tasks` table when it starts:
+
+```sql
+CREATE TABLE IF NOT EXISTS tasks (
+    id SERIAL PRIMARY KEY,
+    title TEXT NOT NULL,
+    done BOOLEAN NOT NULL DEFAULT FALSE
+);
+```
+
+The application also checks whether the table is empty.
+
+If the table is empty, three example tasks are inserted:
+
+```text
+Task 1
+Task 2
+Task 3
+```
+
+The seed operation only runs when the table is empty, so restarting the application does not create duplicate tasks.
+
+---
+
+# Docker Volume
+
+The PostgreSQL database uses a named Docker volume:
+
+```text
+taskdata
+```
+
+The volume provides persistent database storage.
+
+This means database data survives when the containers are stopped and started again.
+
+For example:
+
+```bash
+docker compose down
+```
+
+followed by:
+
+```bash
+docker compose up
+```
+
+does not delete the PostgreSQL data.
+
+The tasks previously created in the database will still exist.
 
 ---
 
@@ -186,6 +265,13 @@ A task has the following structure:
   "title": "Learn Express.js",
   "done": false
 }
+```
+
+The `done` field is a PostgreSQL Boolean:
+
+```text
+true  = completed
+false = not completed
 ```
 
 ---
@@ -256,6 +342,12 @@ If the task does not exist, the API returns:
 
 ```http
 HTTP/1.1 404 Not Found
+```
+
+```json
+{
+  "error": "Task not found"
+}
 ```
 
 ---
@@ -332,6 +424,12 @@ HTTP/1.1 204 No Content
 
 The response has an empty body.
 
+If the task does not exist, the API returns:
+
+```http
+HTTP/1.1 404 Not Found
+```
+
 ---
 
 ## 6. Health Check
@@ -354,23 +452,65 @@ Response:
 
 # PostgreSQL Command-Line Access
 
-PostgreSQL can be opened directly from the Docker container using:
+PostgreSQL can be opened directly from the running Docker Compose database service using:
 
 ```bash
-docker exec -it taskdb psql -U postgres -d tasks
+docker compose exec db psql -U postgres -d tasks
 ```
 
-Inside `psql`, the following command lists all database tables:
+Once connected, the PostgreSQL prompt appears:
+
+```text
+tasks=#
+```
+
+To list all database tables:
 
 ```sql
 \dt
 ```
 
-To exit:
+The `tasks` table should be displayed.
+
+To view all tasks:
+
+```sql
+SELECT * FROM tasks;
+```
+
+Example:
+
+```text
+ id | title  | done
+----+--------+------
+  1 | Task 1 | f
+  2 | Task 2 | f
+  3 | Task 3 | f
+```
+
+To exit PostgreSQL:
 
 ```sql
 \q
 ```
+
+---
+
+# Database Screenshot
+
+The PostgreSQL database was inspected using the `psql` command-line tool.
+
+The screenshot shows the database tables and the stored task records.
+
+Add the screenshot to the project and name it:
+
+```text
+database-screenshot.png
+```
+
+Then display it here:
+
+![PostgreSQL database](database-screenshot.png)
 
 ---
 
@@ -396,45 +536,141 @@ http://localhost:3000/docs
 crud API/
 │
 ├── server.js
+├── db.js
 ├── openapi.json
+├── Dockerfile
+├── compose.yaml
+├── .env.example
 ├── README.md
 ├── swagger-screenshot.png
+├── database-screenshot.png
 ├── .gitignore
 ├── package.json
 └── package-lock.json
 ```
 
-The `.gitignore` file contains:
+The `.env` file is intentionally not included in the repository because it is ignored by Git.
 
-```gitignore
-node_modules/
-.env
-```
+The `.env.example` file is included so that a new developer knows which environment variables are required.
 
 ---
 
 # Docker Setup
 
-The PostgreSQL container can be checked with:
+The complete application stack is managed by Docker Compose.
+
+The main command is:
 
 ```bash
-docker ps
+docker compose up
 ```
 
-The PostgreSQL database can be accessed with:
+To run the containers in the background:
 
 ```bash
-docker exec -it taskdb psql -U postgres -d tasks
+docker compose up -d
 ```
 
-The database runs on:
+To check the running containers:
 
-```text
-Host: localhost
-Port: 5432
-Database: tasks
-Username: postgres
+```bash
+docker compose ps
 ```
+
+To stop and remove the containers:
+
+```bash
+docker compose down
+```
+
+The database volume is not removed by `docker compose down`, so PostgreSQL data remains persistent.
+
+---
+
+# Clean Clone Verification
+
+A new developer should be able to clone the repository and run the complete application without manually creating the PostgreSQL database or tables.
+
+The workflow is:
+
+### 1. Clone the repository
+
+```bash
+git clone <repository-url>
+cd crud-api
+```
+
+### 2. Create `.env`
+
+On Windows PowerShell:
+
+```powershell
+Copy-Item .env.example .env
+```
+
+### 3. Start the complete stack
+
+```bash
+docker compose up
+```
+
+### 4. Test the API
+
+Run:
+
+```bash
+curl -i http://localhost:3000/tasks
+```
+
+The API should return:
+
+```http
+HTTP/1.1 200 OK
+```
+
+with the three seeded tasks.
+
+No manual PostgreSQL setup is required.
+
+---
+
+# Persistence Verification
+
+The database persistence can be verified by creating a task, stopping the stack, and starting it again.
+
+### 1. Start the stack
+
+```bash
+docker compose up
+```
+
+### 2. Create a task
+
+```bash
+curl -i -X POST http://localhost:3000/tasks \
+-H "Content-Type: application/json" \
+-d '{"title":"Persistence test"}'
+```
+
+### 3. Stop the stack
+
+```bash
+docker compose down
+```
+
+### 4. Start the stack again
+
+```bash
+docker compose up
+```
+
+### 5. Check the tasks
+
+```bash
+curl -i http://localhost:3000/tasks
+```
+
+The previously created task should still exist because PostgreSQL data is stored in the persistent Docker volume.
 
 ---
 
@@ -444,40 +680,36 @@ Username: postgres
 * Express.js
 * PostgreSQL
 * Docker
-* better-sqlite3 (previous SQLite stage)
+* Docker Compose
+* `pg`
 * Swagger UI Express
 * OpenAPI 3.0
 
 ---
 
-# Stage 0 Checkpoint
+# Stage 5 Checkpoint
 
-The Stage 0 PostgreSQL setup was completed successfully.
+Stage 5 completes the one-command stack and documentation requirements.
 
-The following command opens the PostgreSQL database:
+The project now provides:
+
+* PostgreSQL running in Docker
+* Node.js API running in Docker
+* Docker Compose managing the API and database
+* `.env` for local configuration
+* `.env.example` for required environment variables
+* `.env` excluded from Git
+* Persistent PostgreSQL storage using a Docker volume
+* Automatic database table creation
+* Automatic seeding of three tasks when the table is empty
+* Swagger UI documentation
+* PostgreSQL database screenshot
+* Complete API endpoint documentation
+
+The entire stack can be started with:
 
 ```bash
-docker exec -it taskdb psql -U postgres -d tasks
+docker compose up
 ```
 
-Running:
-
-```sql
-\dt
-```
-
-returns:
-
-```text
-Did not find any relations.
-```
-
-This is expected at this stage because no tables have been created yet.
-
-The PostgreSQL container is running on:
-
-```text
-localhost:5432
-```
-
-The Docker volume `taskdata` provides persistent database storage.
+A clean clone should work by copying `.env.example` to `.env` and running the command above, with no manual database setup required.
